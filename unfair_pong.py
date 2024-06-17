@@ -9,9 +9,9 @@ SCREEN_TITLE = "Unfair Pong"
 
 PADDLE_WIDTH = 10
 PADDLE_HEIGHT = 100
-BALL_SIZE = 20
+BALL_SIZE = 25
 BALL_SPEED_INCREMENT = 0.1
-EVENT_INTERVAL = 15  # Events happen every 15 seconds
+EVENT_INTERVAL = 20  # Events happen every 15 seconds
 WINNING_SCORE = 10
 
 class PongGame(arcade.Window):
@@ -25,25 +25,26 @@ class PongGame(arcade.Window):
         self.right_paddle_speed_value = 5
         self.miss_message = ""
         self.miss_message_time = 0
+        self.event_message = ""
+        self.event_message_time = 0
         self.score = 0
         self.last_event_time = time.time()
-        self.start_time = time.time()
-        self.countdown_active = True
+        self.game_started = False
         self.last_event = None
         self.setup()
 
     def setup(self):
         self.balls.append(self.create_ball())
-        self.left_paddle = arcade.SpriteSolidColor(PADDLE_WIDTH, PADDLE_HEIGHT, arcade.color.WHITE)
+        self.left_paddle = arcade.SpriteSolidColor(PADDLE_WIDTH, PADDLE_HEIGHT, arcade.color.RED)
         self.left_paddle.center_x = PADDLE_WIDTH // 2 + 10
         self.left_paddle.center_y = SCREEN_HEIGHT // 2
 
-        self.right_paddle = arcade.SpriteSolidColor(PADDLE_WIDTH, PADDLE_HEIGHT, arcade.color.WHITE)
+        self.right_paddle = arcade.SpriteSolidColor(PADDLE_WIDTH, PADDLE_HEIGHT, arcade.color.BLUE)
         self.right_paddle.center_x = SCREEN_WIDTH - PADDLE_WIDTH // 2 - 10
         self.right_paddle.center_y = SCREEN_HEIGHT // 2
 
     def create_ball(self):
-        ball = arcade.SpriteCircle(BALL_SIZE // 2, arcade.color.WHITE)
+        ball = arcade.SpriteCircle(BALL_SIZE // 2, random.choice([arcade.color.RED, arcade.color.GREEN, arcade.color.BLUE, arcade.color.YELLOW]))
         ball.center_x = SCREEN_WIDTH // 2
         ball.center_y = SCREEN_HEIGHT // 2
         ball.change_x = random.choice([3, -3])
@@ -66,12 +67,16 @@ class PongGame(arcade.Window):
             arcade.draw_text(self.miss_message, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
                             arcade.color.RED, 24, anchor_x="center")
 
-        # Draw the countdown message
-        if self.countdown_active:
-            countdown = 5 - int(time.time() - self.start_time)
-            arcade.draw_text(f"Starting in: {countdown}", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50,
-                            arcade.color.GREEN, 24, anchor_x="center")
-            arcade.draw_text("Get a score of 10 to win!", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80,
+        # Draw the event message if there is one
+        if self.event_message:
+            arcade.draw_text(self.event_message, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50,
+                            arcade.color.BLUE, 24, anchor_x="center")
+
+        # Draw the start instructions
+        if not self.game_started:
+            arcade.draw_text("Get a score of 10 to win!", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50,
+                            arcade.color.YELLOW, 24, anchor_x="center")
+            arcade.draw_text("Press any key to start!", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80,
                             arcade.color.YELLOW, 24, anchor_x="center")
 
         # Draw the winning message
@@ -80,12 +85,8 @@ class PongGame(arcade.Window):
                             arcade.color.YELLOW, 36, anchor_x="center")
 
     def on_update(self, delta_time):
-        if self.countdown_active:
-            if time.time() - self.start_time < 5:
-                return
-            else:
-                self.countdown_active = False
-                self.start_time = time.time()  # Reset start time to avoid immediate event trigger
+        if not self.game_started:
+            return
 
         for ball in self.balls:
             ball.center_x += ball.change_x
@@ -103,9 +104,10 @@ class PongGame(arcade.Window):
 
             # Ball out of bounds
             if ball.left > SCREEN_WIDTH:
-                self.miss_message = "Lol you're such a noob"
+                self.miss_message = random.choice(["Try your best!", "Missed it!", "Try again!", "Oops, you missed!", "Better luck next time!", "Oh no!", "Keep trying!", "You'll get it next time!", "Don't give up!"])
                 self.miss_message_time = time.time()
-                self.score -= 1
+                if self.score > 0:
+                    self.score -= 1
                 self.balls.remove(ball)
                 if not self.balls:
                     self.balls.append(self.create_ball())
@@ -141,36 +143,77 @@ class PongGame(arcade.Window):
         if time.time() - self.miss_message_time > 2:
             self.miss_message = ""
 
+        # Remove event message after 2 seconds
+        if time.time() - self.event_message_time > 2:
+            self.event_message = ""
+
         # Check for random events every EVENT_INTERVAL seconds
         if time.time() - self.last_event_time > EVENT_INTERVAL:
             self.trigger_random_event()
             self.last_event_time = time.time()
 
+        # Check if the player has won
+        if self.score >= WINNING_SCORE:
+            arcade.schedule(self.stop_game, 5)
+
+    def stop_game(self, delta_time):
+        self.close()
+
     def trigger_random_event(self):
-        events = ["shorten_paddle", "multiply_ball", "speed_up_ball"]
+        events = ["shorten_paddle", "multiply_ball", "speed_up_ball", "hide_paddle", "freeze_paddle"]
         events = [event for event in events if event != self.last_event]
         event = random.choice(events)
         self.last_event = event
 
         if event == "shorten_paddle":
             self.right_paddle.height = PADDLE_HEIGHT // 2
+            self.event_message = "Paddle shortened!"
+            self.event_message_time = time.time()
             arcade.schedule(self.reset_paddle_size, 10)
         elif event == "multiply_ball":
             for _ in range(2):
                 self.balls.append(self.create_ball())
+            self.event_message = "Ball multiplied!"
+            self.event_message_time = time.time()
         elif event == "speed_up_ball":
             for ball in self.balls:
                 ball.change_x *= 1.5
                 ball.change_y *= 1.5
+            self.event_message = "Ball sped up!"
+            self.event_message_time = time.time()
+        elif event == "hide_paddle":
+            self.right_paddle.alpha = 0
+            self.event_message = "Paddle hidden!"
+            self.event_message_time = time.time()
+            arcade.schedule(self.show_paddle, 10)
+        elif event == "freeze_paddle":
+            self.right_paddle_speed_value = 0
+            self.event_message = "Paddle frozen!"
+            self.event_message_time = time.time()
+            arcade.schedule(self.reset_paddle_speed, 5)
 
     def reset_paddle_size(self, delta_time):
         self.right_paddle.height = PADDLE_HEIGHT
 
+    def reset_ball_size(self, delta_time):
+        for ball in self.balls:
+            ball.width = BALL_SIZE
+            ball.height = BALL_SIZE
+
+    def reset_paddle_speed(self, delta_time):
+        self.right_paddle_speed_value = 5
+
+    def show_paddle(self, delta_time):
+        self.right_paddle.alpha = 255
+
     def on_key_press(self, key, modifiers):
-        if key == arcade.key.UP:
-            self.right_paddle_speed = self.right_paddle_speed_value
-        elif key == arcade.key.DOWN:
-            self.right_paddle_speed = -self.right_paddle_speed_value
+        if not self.game_started:
+            self.game_started = True
+        else:
+            if key == arcade.key.UP:
+                self.right_paddle_speed = self.right_paddle_speed_value
+            elif key == arcade.key.DOWN:
+                self.right_paddle_speed = -self.right_paddle_speed_value
 
     def on_key_release(self, key, modifiers):
         if key == arcade.key.UP or key == arcade.key.DOWN:
